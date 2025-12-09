@@ -102,7 +102,7 @@ def processar_retransmissao(socket_cliente, buffer_pacotes, taxa_perda, taxa_err
         # Recebe número de pacotes a retransmitir
         dados = socket_cliente.recv(4)
         if not dados:
-            print("[INFO] Servidor não solicitou retransmissões ou conexão fechada")
+            print("Servidor não solicitou retransmissões")
             return True
         
         num_retransmissoes = struct.unpack('!I', dados)[0]
@@ -117,9 +117,6 @@ def processar_retransmissao(socket_cliente, buffer_pacotes, taxa_perda, taxa_err
         pacotes_retransmitir = []
         for _ in range(num_retransmissoes):
             dados = socket_cliente.recv(4)
-            if not dados:
-                print("[ERRO] Conexão perdida ao receber lista de retransmissão")
-                return True
             numero_seq = struct.unpack('!I', dados)[0]
             pacotes_retransmitir.append(numero_seq)
         
@@ -132,7 +129,6 @@ def processar_retransmissao(socket_cliente, buffer_pacotes, taxa_perda, taxa_err
         
         for numero_seq in pacotes_retransmitir:
             if numero_seq not in buffer_pacotes:
-                print(f"[AVISO] Pacote {numero_seq} não encontrado no buffer")
                 continue
             
             dados, checksum = buffer_pacotes[numero_seq]
@@ -158,20 +154,12 @@ def processar_retransmissao(socket_cliente, buffer_pacotes, taxa_perda, taxa_err
             total_reenviados += 1
         
         # Sinaliza fim das retransmissões
-        try:
-            socket_cliente.send(struct.pack('!II', *PACOTE_FIM))
-            print('[INFO] Pacote FIM enviado')
-        except (BrokenPipeError, ConnectionResetError, OSError) as e:
-            print(f'[ERRO] Erro ao enviar pacote FIM: {e}')
-            return True
+        socket_cliente.send(struct.pack('!II', *PACOTE_FIM))
         
         print(f"Rodada {rodada} - Reenviados: {total_reenviados}, Perdidos: {total_perdidos_retrans}, Com erro: {total_erro_retrans}")
         return False  # Retorna False para indicar que ainda não terminou (servidor deve verificar novamente)
     except socket.timeout:
         print('[TIMEOUT] Timeout esperando requisição de retransmissão do servidor')
-        return True
-    except (ConnectionResetError, BrokenPipeError, OSError) as e:
-        print(f'[ERRO] Conexão perdida durante retransmissão: {e}')
         return True
     except Exception as e:
         print(f'[ERRO] Erro processando retransmissão: {e}')
@@ -223,13 +211,8 @@ def enviar_arquivo(nome_arquivo, host, porta, tamanho_buffer=TAMANHO_BUFFER_PADR
 
     # Conecta ao servidor
     socket_cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socket_cliente.settimeout(15.0)  # Timeout de 15 segundos
-    try:
-        socket_cliente.connect((host, porta))
-        print(f"Conectado ao servidor {host}:{porta}")
-    except (ConnectionRefusedError, socket.timeout) as e:
-        print(f"[ERRO] Não foi possível conectar ao servidor: {e}")
-        return
+    socket_cliente.settimeout(10.0)  # Timeout de 10 segundos
+    socket_cliente.connect((host, porta))
 
     # Envia o nome do arquivo (padded para TAMANHO_NOME_ARQUIVO bytes)
     TAMANHO_NOME_ARQUIVO = 1024
@@ -254,15 +237,11 @@ def enviar_arquivo(nome_arquivo, host, porta, tamanho_buffer=TAMANHO_BUFFER_PADR
     # Loop de retransmissão até completar
     print("\n=== Retransmissão ===")
     rodada = 1
-    max_rodadas = 10  # Limite de rodadas para evitar loop infinito
-    while rodada <= max_rodadas:
+    while True:
         concluido = processar_retransmissao(socket_cliente, buffer_pacotes, taxa_perda, taxa_erro, rodada)
         if concluido:
             break
         rodada += 1
-    
-    if rodada > max_rodadas:
-        print(f"\n[AVISO] Limite de {max_rodadas} rodadas atingido")
 
     print("-" * 50)
     print(f"✓ Transferência finalizada! Total de rodadas: {rodada}")

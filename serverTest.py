@@ -44,14 +44,12 @@ def receber_pacotes_iniciais(conexao, tamanho_pacote, num_pacotes_esperados):
         try:
             dados = conexao.recv(tamanho_pacote)
             if not dados or len(dados) < TAMANHO_CABECALHO:
-                print('[INFO] Conexão fechada ou dados insuficientes')
                 break
             
             numero_seq, checksum_recebido = extrair_cabecalho(dados)
             
             # Pacote com seq 0 sinaliza fim do envio
             if numero_seq == 0:
-                print('[INFO] Pacote FIM recebido')
                 break
             
             # Pego dados apenas depois do cabeçalho
@@ -68,9 +66,6 @@ def receber_pacotes_iniciais(conexao, tamanho_pacote, num_pacotes_esperados):
                 numero_seq_maximo_recebido = numero_seq
         except socket.timeout:
             print('[TIMEOUT] Timeout esperando pacotes iniciais')
-            break
-        except (ConnectionResetError, BrokenPipeError, OSError) as e:
-            print(f'[ERRO] Conexão perdida: {e}')
             break
         except Exception as e:
             print(f'[ERRO] Erro recebendo pacote: {e}')
@@ -102,22 +97,17 @@ def exibir_resumo_inicial(pacotes_validos, numero_seq_maximo, pacotes_ausentes):
 
 def solicitar_retransmissao(conexao, pacotes_ausentes):
     """Envia solicitação de retransmissão ao cliente."""
-    try:
-        # Envia número de pacotes a retransmitir
-        conexao.send(struct.pack('!I', len(pacotes_ausentes)))
-        
-        if not pacotes_ausentes:
-            return True
-        
-        # Envia lista de números de sequência
-        for numero_seq in pacotes_ausentes:
-            conexao.send(struct.pack('!I', numero_seq))
-        
-        print(f"Solicitada retransmissão de {len(pacotes_ausentes)} pacote(s)")
-        return True
-    except (BrokenPipeError, ConnectionResetError, OSError) as e:
-        print(f"[ERRO] Erro ao solicitar retransmissão (broken pipe): {e}")
-        return False
+    # Envia número de pacotes a retransmitir
+    conexao.send(struct.pack('!I', len(pacotes_ausentes)))
+    
+    if not pacotes_ausentes:
+        return
+    
+    # Envia lista de números de sequência
+    for numero_seq in pacotes_ausentes:
+        conexao.send(struct.pack('!I', numero_seq))
+    
+    print(f"Solicitada retransmissão de {len(pacotes_ausentes)} pacote(s)")
 
 
 def receber_retransmissoes(conexao, tamanho_pacote, pacotes_validos):
@@ -126,14 +116,12 @@ def receber_retransmissoes(conexao, tamanho_pacote, pacotes_validos):
         try:
             dados = conexao.recv(tamanho_pacote)
             if not dados or len(dados) < TAMANHO_CABECALHO:
-                print('[INFO] Conexão fechada ou dados insuficientes durante retransmissão')
                 break
             
             numero_seq, checksum_recebido = extrair_cabecalho(dados)
             
             # Pacote com seq 0 sinaliza fim das retransmissões
             if numero_seq == 0:
-                print('[INFO] Pacote FIM recebido')
                 break
             
             payload = dados[TAMANHO_CABECALHO:]
@@ -145,9 +133,6 @@ def receber_retransmissoes(conexao, tamanho_pacote, pacotes_validos):
                 print(f'[REENVIO ERRO] Pacote {numero_seq} ainda com erro')
         except socket.timeout:
             print('[TIMEOUT] Timeout esperando retransmissões')
-            break
-        except (ConnectionResetError, BrokenPipeError, OSError) as e:
-            print(f'[ERRO] Conexão perdida durante retransmissão: {e}')
             break
         except Exception as e:
             print(f'[ERRO] Erro recebendo retransmissão: {e}')
@@ -200,7 +185,7 @@ def iniciar_servidor(host, porta, tamanho_buffer=TAMANHO_BUFFER_PADRAO):
 
     # Aceita conexão
     conexao, endereco = socket_servidor.accept()
-    conexao.settimeout(10.0)  # Timeout de 10 segundos para evitar bloqueios
+    conexao.settimeout(5.0)  # Timeout de 5 segundos para evitar bloqueios
     print(f"Conexão estabelecida com {endereco}")
 
     # Recebe nome do arquivo
@@ -224,14 +209,10 @@ def iniciar_servidor(host, porta, tamanho_buffer=TAMANHO_BUFFER_PADRAO):
     # Loop de retransmissão até receber todos os pacotes
     print("\n=== Solicitação de Retransmissão ===")
     rodada = 1
-    max_rodadas = 10  # Limite de rodadas para evitar loop infinito
     
-    while pacotes_ausentes and rodada <= max_rodadas:
+    while pacotes_ausentes:
         print(f"\n--- Rodada {rodada} ---")
-        if not solicitar_retransmissao(conexao, pacotes_ausentes):
-            print("[ERRO] Falha ao solicitar retransmissão. Encerrando...")
-            break
-        
+        solicitar_retransmissao(conexao, pacotes_ausentes)
         receber_retransmissoes(conexao, tamanho_pacote, pacotes_validos)
         
         # Verifica novamente se ainda faltam pacotes
@@ -246,9 +227,6 @@ def iniciar_servidor(host, porta, tamanho_buffer=TAMANHO_BUFFER_PADRAO):
     # Se não havia pacotes ausentes desde o início
     if rodada == 1 and not pacotes_ausentes:
         solicitar_retransmissao(conexao, pacotes_ausentes)
-    
-    if rodada > max_rodadas:
-        print(f"\n[AVISO] Limite de {max_rodadas} rodadas atingido")
     
     print(f"\nTotal de rodadas de retransmissão: {rodada}")
     print("-" * 50)
