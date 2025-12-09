@@ -206,8 +206,11 @@ def enviar_arquivo(nome_arquivo, host, porta, tamanho_buffer=TAMANHO_BUFFER_PADR
     socket_cliente = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socket_cliente.connect((host, porta))
 
-    # Envia o nome do arquivo
-    socket_cliente.send(nome_arquivo.encode('utf-8'))
+    # Envia o nome do arquivo (padded para TAMANHO_NOME_ARQUIVO bytes)
+    TAMANHO_NOME_ARQUIVO = 1024
+    nome_arquivo_bytes = nome_arquivo.encode('utf-8')
+    nome_arquivo_padded = nome_arquivo_bytes.ljust(TAMANHO_NOME_ARQUIVO, b'\x00')
+    socket_cliente.send(nome_arquivo_padded)
     
     # Envia o número total de pacotes (para que servidor saiba quantos esperar)
     socket_cliente.send(struct.pack('!I', num_pacotes))

@@ -173,7 +173,7 @@ def iniciar_servidor(host, porta, tamanho_buffer=TAMANHO_BUFFER_PADRAO):
     print(f"Conexão estabelecida com {endereco}")
 
     # Recebe nome do arquivo
-    nome_arquivo = conexao.recv(TAMANHO_NOME_ARQUIVO).decode('utf-8')
+    nome_arquivo = conexao.recv(TAMANHO_NOME_ARQUIVO).decode('utf-8').rstrip('\x00')
     print(f"Recebendo arquivo: {nome_arquivo}")
     
     # Recebe número total de pacotes esperados
