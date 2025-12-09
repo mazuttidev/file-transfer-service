@@ -1,0 +1,4 @@
+Programar o envio de um arquivo do cliente para o servidor:
+- (1) o envio deve ser feito em pacotes, cujo tamanho deve ser configurado pelo usuário (50%);
+- (2) rotular pacotes que serão perdidos ou que chegarão com erros (60%);
+- (3) tratar pacotes perdidos e pacotes com erros, reenviando-os (100%).
